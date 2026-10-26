@@ -1,0 +1,457 @@
+<?php
+declare(strict_types=1);
+
+namespace Nexus\Database;
+
+class Seeder
+{
+    public static function ensureSeeded(FirestoreInterface $db): void
+    {
+        $config = $db->getDocument('settings', 'business_config');
+        if ($config !== null && !empty($config['seeded'])) {
+            return;
+        }
+        self::seedAll($db);
+    }
+
+    public static function seedAll(FirestoreInterface $db): void
+    {
+        $now = time();
+        $isoNow = date('Y-m-d\TH:i:sP', $now);
+
+        // 1. Business Settings (IDR / Rupiah: Regular Rp 20.000/jam, VIP Rp 50.000/jam)
+        $db->setDocument('settings', 'business_config', [
+            'business_name' => 'Nexus Arena Gaming & Rental',
+            'tagline' => 'Console Lounge & VIP Rental System',
+            'currency' => 'IDR',
+            'currency_symbol' => 'Rp ',
+            'regular_default_rate' => 20000,
+            'vip_default_rate' => 50000,
+            'allowed_durations_hours' => [1, 2, 3, 4, 6, 8],
+            'opening_hours' => '10:00 - 02:00 WIB (Setiap Hari)',
+            'low_stock_threshold' => 5,
+            'low_time_warning_minutes' => 15,
+            'admin_online' => true,
+            'support_welcome_message' => 'Selamat datang di Layanan Bantuan Nexus Arena. Admin siap membantu Anda.',
+            'seeded' => true,
+            'seeded_at' => $isoNow,
+        ], false);
+
+        // 2. Users (Admin + Customers) - Passwords hashed with BCRYPT
+        $users = [
+            [
+                'id' => 'usr_admin_1',
+                'name' => 'Admin Utama',
+                'email' => 'admin@nexusarena.gg',
+                'phone' => '0812-3456-7890',
+                'role' => 'admin',
+                'status' => 'active',
+                'password_hash' => password_hash('Admin@123', PASSWORD_BCRYPT),
+                'is_demo' => false,
+                'created_at' => $isoNow,
+            ],
+            [
+                'id' => 'usr_cust_1',
+                'name' => 'Alex Mercer',
+                'email' => 'alex@gamer.gg',
+                'phone' => '0812-1111-2222',
+                'role' => 'customer',
+                'status' => 'active',
+                'password_hash' => password_hash('Customer@123', PASSWORD_BCRYPT),
+                'is_demo' => false,
+                'created_at' => $isoNow,
+            ],
+            [
+                'id' => 'usr_cust_2',
+                'name' => 'Maya Lin',
+                'email' => 'maya@gamer.gg',
+                'phone' => '0812-3333-4444',
+                'role' => 'customer',
+                'status' => 'active',
+                'password_hash' => password_hash('Customer@123', PASSWORD_BCRYPT),
+                'is_demo' => false,
+                'created_at' => $isoNow,
+            ],
+            [
+                'id' => 'usr_cust_3',
+                'name' => 'Ryan Reyes',
+                'email' => 'ryan@gamer.gg',
+                'phone' => '0812-5555-6666',
+                'role' => 'customer',
+                'status' => 'active',
+                'password_hash' => password_hash('Customer@123', PASSWORD_BCRYPT),
+                'is_demo' => false,
+                'created_at' => $isoNow,
+            ],
+        ];
+        foreach ($users as $u) {
+            $db->setDocument('users', $u['id'], $u, false);
+        }
+
+        // 3. Rooms (Regular: Rp 20.000/jam, VIP: Rp 50.000/jam — all clean & available from start)
+        $rooms = [
+            [
+                'id' => 'room_101',
+                'room_number' => '101',
+                'name' => 'Room 101 - Regular PS5 A',
+                'type' => 'regular',
+                'status' => 'available',
+                'consoles' => ['PlayStation 5'],
+                'rate_per_hour' => 20000,
+                'max_players' => 4,
+                'facilities' => ['55" 4K 120Hz Gaming TV', 'DualSense Charging Dock', 'Ergonomic Gaming Chairs', 'High-Speed LAN'],
+                'current_session_id' => null,
+                'description' => 'Unit reguler PlayStation 5 untuk game olahraga dan fighting.',
+            ],
+            [
+                'id' => 'room_102',
+                'room_number' => '102',
+                'name' => 'Room 102 - Regular PS5 B',
+                'type' => 'regular',
+                'status' => 'available',
+                'consoles' => ['PlayStation 5'],
+                'rate_per_hour' => 20000,
+                'max_players' => 4,
+                'facilities' => ['55" 4K 120Hz Gaming TV', 'DualSense Charging Dock', 'Ergonomic Gaming Chairs'],
+                'current_session_id' => null,
+                'description' => 'Unit reguler PlayStation 5 dengan koleksi game action-adventure dan balap.',
+            ],
+            [
+                'id' => 'room_103',
+                'room_number' => '103',
+                'name' => 'Room 103 - Regular Xbox C',
+                'type' => 'regular',
+                'status' => 'available',
+                'consoles' => ['Xbox Series X'],
+                'rate_per_hour' => 20000,
+                'max_players' => 4,
+                'facilities' => ['55" 4K QLED Display', 'Xbox Wireless Headsets', 'Co-op Couch Seating'],
+                'current_session_id' => null,
+                'description' => 'Unit reguler Xbox Series X dengan koleksi game shooter dan RPG.',
+            ],
+            [
+                'id' => 'room_104',
+                'room_number' => '104',
+                'name' => 'Room 104 - Regular Switch D',
+                'type' => 'regular',
+                'status' => 'available',
+                'consoles' => ['Nintendo Switch OLED'],
+                'rate_per_hour' => 20000,
+                'max_players' => 4,
+                'facilities' => ['65" Party Screen', '4x Pro Controllers', 'Lounge Seating'],
+                'current_session_id' => null,
+                'description' => 'Unit reguler Nintendo Switch OLED hingga 4 pemain untuk Mario Kart dan Smash Bros.',
+            ],
+            [
+                'id' => 'room_201',
+                'room_number' => 'VIP-201',
+                'name' => 'VIP 201 - Executive Suite Alpha',
+                'type' => 'vip',
+                'status' => 'available',
+                'consoles' => ['PlayStation 5 Pro', 'Xbox Series X'],
+                'rate_per_hour' => 50000,
+                'max_players' => 6,
+                'facilities' => [
+                    '85" 4K 120Hz OLED Display',
+                    'Dolby Atmos Surround Sound',
+                    'Luxury Leather Recliner Sofa',
+                    'Private Mini-Bar & Snack Table',
+                    'Soundproof Acoustic Room',
+                ],
+                'current_session_id' => null,
+                'description' => 'Ruang VIP privat kedap suara dengan 2 konsol dan sistem audio surround.',
+            ],
+            [
+                'id' => 'room_202',
+                'room_number' => 'VIP-202',
+                'name' => 'VIP 202 - Premier Suite Omega',
+                'type' => 'vip',
+                'status' => 'available',
+                'consoles' => ['PlayStation 5 Pro', 'Nintendo Switch OLED'],
+                'rate_per_hour' => 50000,
+                'max_players' => 8,
+                'facilities' => [
+                    '100" 4K Laser Cinema Screen',
+                    'Dual Console Setup',
+                    'Smart Ambient Lighting',
+                    'Private En-Suite Restroom',
+                    'Priority Room Service',
+                ],
+                'current_session_id' => null,
+                'description' => 'Ruang VIP kapasitas hingga 8 pemain dengan layar proyektor laser 100 inci.',
+            ],
+        ];
+        foreach ($rooms as $r) {
+            $db->setDocument('rooms', $r['id'], $r, false);
+        }
+
+        // 4. Games Catalog (play_count reset to 0)
+        $games = [
+            [
+                'id' => 'game_fc26',
+                'title' => 'EA Sports FC 26',
+                'genre' => 'Sports',
+                'platform' => 'PlayStation 5',
+                'cover_url' => 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=600&q=80',
+                'description' => 'Simulasi sepak bola generasi terbaru dengan mode UEFA Champions League dan 4-player kickoff.',
+                'status' => 'available',
+                'play_count' => 0,
+            ],
+            [
+                'id' => 'game_tekken8',
+                'title' => 'Tekken 8',
+                'genre' => 'Fighting',
+                'platform' => 'PlayStation 5',
+                'cover_url' => 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80',
+                'description' => 'Game fighting kompetitif Unreal Engine 5 dengan 32 karakter dan sistem Heat.',
+                'status' => 'available',
+                'play_count' => 0,
+            ],
+            [
+                'id' => 'game_spiderman2',
+                'title' => 'Marvel\'s Spider-Man 2',
+                'genre' => 'Action-Adventure',
+                'platform' => 'PlayStation 5',
+                'cover_url' => 'https://images.unsplash.com/photo-1607853202273-797f1c22a38e?auto=format&fit=crop&w=600&q=80',
+                'description' => 'Petualangan aksi Peter Parker dan Miles Morales menghadapi Venom di New York.',
+                'status' => 'available',
+                'play_count' => 0,
+            ],
+            [
+                'id' => 'game_halo',
+                'title' => 'Halo Infinite',
+                'genre' => 'Shooter',
+                'platform' => 'Xbox Series X',
+                'cover_url' => 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=600&q=80',
+                'description' => 'Game FPS sci-fi eksklusif Xbox dengan mode campaign dan multiplayer 120fps.',
+                'status' => 'available',
+                'play_count' => 0,
+            ],
+            [
+                'id' => 'game_mk8',
+                'title' => 'Mario Kart 8 Deluxe',
+                'genre' => 'Racing',
+                'platform' => 'Nintendo Switch OLED',
+                'cover_url' => 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80',
+                'description' => 'Balapan seru split-screen hingga 4 pemain lokal dengan 96 sirkuit.',
+                'status' => 'available',
+                'play_count' => 0,
+            ],
+            [
+                'id' => 'game_ssbu',
+                'title' => 'Super Smash Bros. Ultimate',
+                'genre' => 'Fighting',
+                'platform' => 'Nintendo Switch OLED',
+                'cover_url' => 'https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?auto=format&fit=crop&w=600&q=80',
+                'description' => 'Pertarungan arena crossover hingga 8 pemain lokal dengan seluruh karakter DLC.',
+                'status' => 'available',
+                'play_count' => 0,
+            ],
+            [
+                'id' => 'game_gt7',
+                'title' => 'Gran Turismo 7',
+                'genre' => 'Racing',
+                'platform' => 'PlayStation 5',
+                'cover_url' => 'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?auto=format&fit=crop&w=600&q=80',
+                'description' => 'Simulator balap realistis dengan ratusan mobil dan mode split-screen 2 pemain.',
+                'status' => 'available',
+                'play_count' => 0,
+            ],
+            [
+                'id' => 'game_elden',
+                'title' => 'Elden Ring: Shadow of the Erdtree',
+                'genre' => 'RPG',
+                'platform' => 'Xbox Series X',
+                'cover_url' => 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80',
+                'description' => 'Action RPG open-world karya FromSoftware lengkap dengan ekspansi terbaru.',
+                'status' => 'available',
+                'play_count' => 0,
+            ],
+        ];
+        foreach ($games as $g) {
+            $db->setDocument('games', $g['id'], $g, false);
+        }
+
+        // 5. Room-Game Mapping (`room_games`)
+        $mappings = [
+            ['game_id' => 'game_fc26', 'room_id' => 'room_101'],
+            ['game_id' => 'game_fc26', 'room_id' => 'room_102'],
+            ['game_id' => 'game_fc26', 'room_id' => 'room_103'],
+            ['game_id' => 'game_fc26', 'room_id' => 'room_201'],
+            ['game_id' => 'game_fc26', 'room_id' => 'room_202'],
+
+            ['game_id' => 'game_tekken8', 'room_id' => 'room_101'],
+            ['game_id' => 'game_tekken8', 'room_id' => 'room_201'],
+
+            ['game_id' => 'game_spiderman2', 'room_id' => 'room_102'],
+            ['game_id' => 'game_spiderman2', 'room_id' => 'room_201'],
+
+            ['game_id' => 'game_halo', 'room_id' => 'room_103'],
+            ['game_id' => 'game_halo', 'room_id' => 'room_201'],
+
+            ['game_id' => 'game_mk8', 'room_id' => 'room_104'],
+            ['game_id' => 'game_mk8', 'room_id' => 'room_202'],
+
+            ['game_id' => 'game_ssbu', 'room_id' => 'room_104'],
+            ['game_id' => 'game_ssbu', 'room_id' => 'room_202'],
+
+            ['game_id' => 'game_gt7', 'room_id' => 'room_101'],
+            ['game_id' => 'game_gt7', 'room_id' => 'room_102'],
+            ['game_id' => 'game_gt7', 'room_id' => 'room_202'],
+
+            ['game_id' => 'game_elden', 'room_id' => 'room_103'],
+            ['game_id' => 'game_elden', 'room_id' => 'room_201'],
+        ];
+        foreach ($mappings as $m) {
+            $id = 'rg_' . $m['room_id'] . '_' . $m['game_id'];
+            $db->setDocument('room_games', $id, [
+                'id' => $id,
+                'room_id' => $m['room_id'],
+                'game_id' => $m['game_id'],
+                'assigned_at' => $isoNow,
+            ], false);
+        }
+
+        // 6. Controllers Inventory (all available at start)
+        $controllers = [
+            [
+                'id' => 'ctrl_room_101',
+                'room_id' => 'room_101',
+                'room_name' => 'Room 101 - Regular PS5 A',
+                'console' => 'PlayStation 5 (DualSense)',
+                'total_controllers' => 4,
+                'available_controllers' => 4,
+                'in_use_controllers' => 0,
+                'maintenance_controllers' => 0,
+            ],
+            [
+                'id' => 'ctrl_room_102',
+                'room_id' => 'room_102',
+                'room_name' => 'Room 102 - Regular PS5 B',
+                'console' => 'PlayStation 5 (DualSense)',
+                'total_controllers' => 4,
+                'available_controllers' => 4,
+                'in_use_controllers' => 0,
+                'maintenance_controllers' => 0,
+            ],
+            [
+                'id' => 'ctrl_room_103',
+                'room_id' => 'room_103',
+                'room_name' => 'Room 103 - Regular Xbox C',
+                'console' => 'Xbox Series X Wireless',
+                'total_controllers' => 4,
+                'available_controllers' => 4,
+                'in_use_controllers' => 0,
+                'maintenance_controllers' => 0,
+            ],
+            [
+                'id' => 'ctrl_room_104',
+                'room_id' => 'room_104',
+                'room_name' => 'Room 104 - Regular Switch D',
+                'console' => 'Nintendo Switch Pro Controller',
+                'total_controllers' => 4,
+                'available_controllers' => 4,
+                'in_use_controllers' => 0,
+                'maintenance_controllers' => 0,
+            ],
+            [
+                'id' => 'ctrl_room_201',
+                'room_id' => 'room_201',
+                'room_name' => 'VIP 201 - Executive Suite Alpha',
+                'console' => 'DualSense Edge + Xbox Elite v2',
+                'total_controllers' => 6,
+                'available_controllers' => 6,
+                'in_use_controllers' => 0,
+                'maintenance_controllers' => 0,
+            ],
+            [
+                'id' => 'ctrl_room_202',
+                'room_id' => 'room_202',
+                'room_name' => 'VIP 202 - Premier Suite Omega',
+                'console' => 'DualSense Edge + Switch Pro Pack',
+                'total_controllers' => 8,
+                'available_controllers' => 8,
+                'in_use_controllers' => 0,
+                'maintenance_controllers' => 0,
+            ],
+        ];
+        foreach ($controllers as $c) {
+            $db->setDocument('controllers', $c['id'], $c, false);
+        }
+
+        // 7. Food & Beverage Menu Items (Prices in IDR / Rupiah)
+        $menuItems = [
+            [
+                'id' => 'menu_burger',
+                'name' => 'Signature Wagyu Smash Burger',
+                'category' => 'Makanan Berat',
+                'price' => 35000,
+                'cost_price' => 15000,
+                'stock' => 25,
+                'is_active' => true,
+                'image_url' => 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=600&q=80',
+                'description' => 'Double patty daging sapi wagyu, keju cheddar, bawang karamel, dan roti brioche panggang.',
+            ],
+            [
+                'id' => 'menu_wings',
+                'name' => 'Crispy Korean Chicken Wings (6 pcs)',
+                'category' => 'Snack',
+                'price' => 28000,
+                'cost_price' => 12000,
+                'stock' => 20,
+                'is_active' => true,
+                'image_url' => 'https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=600&q=80',
+                'description' => 'Potongan ayam krispi tanpa tulang dengan saus gochujang manis pedas.',
+            ],
+            [
+                'id' => 'menu_fries',
+                'name' => 'Truffle Parmesan French Fries',
+                'category' => 'Snack',
+                'price' => 20000,
+                'cost_price' => 8000,
+                'stock' => 30,
+                'is_active' => true,
+                'image_url' => 'https://images.unsplash.com/photo-1576107232684-1279f3908594?auto=format&fit=crop&w=600&q=80',
+                'description' => 'Kentang goreng renyah dengan taburan keju parmesan dan aroma minyak truffle.',
+            ],
+            [
+                'id' => 'menu_nachos',
+                'name' => 'Cheese Nacho Platter',
+                'category' => 'Snack',
+                'price' => 25000,
+                'cost_price' => 10000,
+                'stock' => 15,
+                'is_active' => true,
+                'image_url' => 'https://images.unsplash.com/photo-1513456852971-30c0b8199d4d?auto=format&fit=crop&w=600&q=80',
+                'description' => 'Keripik tortilla dengan saus keju hangat, jalapeno, dan salsa segar.',
+            ],
+            [
+                'id' => 'menu_neon_fizz',
+                'name' => 'Blueberry Energy Fizz',
+                'category' => 'Minuman',
+                'price' => 15000,
+                'cost_price' => 5000,
+                'stock' => 40,
+                'is_active' => true,
+                'image_url' => 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=600&q=80',
+                'description' => 'Minuman soda segar rasa blueberry dingin.',
+            ],
+            [
+                'id' => 'menu_latte',
+                'name' => 'Iced Caramel Cold Brew',
+                'category' => 'Minuman',
+                'price' => 18000,
+                'cost_price' => 6000,
+                'stock' => 35,
+                'is_active' => true,
+                'image_url' => 'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?auto=format&fit=crop&w=600&q=80',
+                'description' => 'Es kopi cold brew lembut dengan krim karamel.',
+            ],
+        ];
+        foreach ($menuItems as $item) {
+            $db->setDocument('menu_items', $item['id'], $item, false);
+        }
+
+        // All financial, session, order, booking, and queue histories start at 0 (empty) as requested.
+    }
+}

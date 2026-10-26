@@ -1,0 +1,147 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for role-based access control
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'admin' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         getUserData().role == 'admin')
+      );
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // 1. users collection
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isOwner(userId) && request.resource.data.role == 'customer';
+      allow update: if isAdmin() || (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'password_hash']));
+      allow delete: if isAdmin();
+    }
+
+    // 2. rooms collection
+    match /rooms/{roomId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 3. games collection
+    match /games/{gameId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 4. room_games mapping collection
+    match /room_games/{mappingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 5. bookings collection (VIP & Room Bookings)
+    match /bookings/{bookingId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.user_id == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.user_id == request.auth.uid && resource.data.status == 'pending');
+    }
+
+    // 6. queues collection
+    match /queues/{queueId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.user_id == request.auth.uid);
+    }
+
+    // 7. sessions collection
+    match /sessions/{sessionId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.user_id == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    // 8. controllers collection & requests
+    match /controllers/{controllerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /controller_requests/{requestId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.user_id == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // 9. menu_items collection
+    match /menu_items/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 10. orders collection
+    match /orders/{orderId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.user_id == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // 11. inventory_movements collection (Admin Audit Log)
+    match /inventory_movements/{movementId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 12. transactions collection (Financial Ledger)
+    match /transactions/{txId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.user_id == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    // 13. expenses collection (Admin Operating Costs)
+    match /expenses/{expenseId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 14. support_conversations collection
+    match /support_conversations/{convId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.user_id == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update: if isAdmin() || (isAuthenticated() && resource.data.user_id == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // 15. support_messages collection
+    match /support_messages/{msgId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.user_id == request.auth.uid);
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    // 16. feedback collection
+    match /feedback/{feedbackId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // 17. notifications collection
+    match /notifications/{notifId} {
+      allow read, update: if isAdmin() || (isAuthenticated() && resource.data.user_id == request.auth.uid);
+      allow create, delete: if isAdmin();
+    }
+
+    // 18. settings collection
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

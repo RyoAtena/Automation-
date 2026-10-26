@@ -1,0 +1,6 @@
+.env
+storage/*.sqlite
+storage/*.sqlite-wal
+storage/*.sqlite-shm
+storage/*service-account*.json
+*.log
