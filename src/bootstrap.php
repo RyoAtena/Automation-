@@ -20,5 +20,8 @@ spl_autoload_register(static function (string $class): void {
 Env::load();
 
 if (session_status() === PHP_SESSION_NONE && PHP_SAPI !== 'cli') {
-    session_start();
+    if (getenv('VERCEL') || getenv('AWS_LAMBDA_FUNCTION_NAME')) {
+        @session_save_path(sys_get_temp_dir());
+    }
+    @session_start();
 }

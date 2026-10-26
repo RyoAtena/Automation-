@@ -17,13 +17,22 @@ class LocalFirestoreAdapter implements FirestoreInterface
     public function __construct(?string $customPath = null)
     {
         $relPath = $customPath ?? (string)Env::get('LOCAL_FIRESTORE_PATH', 'storage/firestore_local.sqlite');
-        $this->dbPath = str_contains($relPath, ':') || str_starts_with($relPath, '/')
+        $candidatePath = str_contains($relPath, ':') || str_starts_with($relPath, '/')
             ? $relPath
             : Env::rootPath($relPath);
 
-        $dir = dirname($this->dbPath);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0775, true);
+        $dir = dirname($candidatePath);
+        if (getenv('VERCEL') || getenv('AWS_LAMBDA_FUNCTION_NAME')) {
+            $this->dbPath = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'nexus_firestore_local.sqlite';
+        } else {
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0775, true);
+            }
+            if (!is_dir($dir) || !is_writable($dir)) {
+                $this->dbPath = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'nexus_firestore_local.sqlite';
+            } else {
+                $this->dbPath = $candidatePath;
+            }
         }
 
         $this->pdo = new PDO('sqlite:' . $this->dbPath, null, null, [
