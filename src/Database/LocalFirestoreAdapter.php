@@ -55,7 +55,7 @@ class LocalFirestoreAdapter implements FirestoreInterface
             CREATE TABLE IF NOT EXISTS firestore_documents (
                 collection VARCHAR(128) NOT NULL,
                 doc_id VARCHAR(128) NOT NULL,
-                data JSON NOT NULL,
+                data TEXT NOT NULL,
                 created_at VARCHAR(40) NOT NULL,
                 updated_at VARCHAR(40) NOT NULL,
                 PRIMARY KEY (collection, doc_id)
@@ -123,11 +123,8 @@ class LocalFirestoreAdapter implements FirestoreInterface
         $json = json_encode($merged, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         $stmt = $this->pdo->prepare(<<<SQL
-            INSERT INTO firestore_documents (collection, doc_id, data, created_at, updated_at)
+            INSERT OR REPLACE INTO firestore_documents (collection, doc_id, data, created_at, updated_at)
             VALUES (:c, :id, :data, :created, :updated)
-            ON CONFLICT(collection, doc_id) DO UPDATE SET
-                data = excluded.data,
-                updated_at = excluded.updated_at
         SQL);
 
         $stmt->execute([
