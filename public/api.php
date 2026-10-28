@@ -299,9 +299,8 @@ try {
             return ['orders' => $orderService->listOrders($user)];
         })(),
 
-        'orders.create' => (static function () use ($authMiddleware, $orderService, $input): array {
-            $user = $authMiddleware->requireAuth();
-            return ['order' => $orderService->createOrder($user, $input)];
+        'orders.create' => (static function () use ($currentUser, $orderService, $input): array {
+            return ['order' => $orderService->createOrder($currentUser, $input)];
         })(),
 
         'orders.status' => (static function () use ($authMiddleware, $orderService, $input): array {

@@ -49,18 +49,23 @@ class OrderService
     }
 
     /**
-     * Customer: Submit a food & beverage order linked to their room or session.
+     * Customer (or QR Table Guest): Submit a food & beverage order linked to their room or session.
      * Atomically verifies stock, deducts stock, logs `inventory_movements`, and records a financial transaction.
      */
-    public function createOrder(array $user, array $input): array
+    public function createOrder(?array $user, array $input): array
     {
         $cartItems = $input['items'] ?? [];
         $roomId = trim((string)($input['room_id'] ?? ''));
         $notes = trim((string)($input['notes'] ?? ''));
-        $paymentMethod = trim((string)($input['payment_method'] ?? 'Room Tab'));
+        $paymentMethod = trim((string)($input['payment_method'] ?? 'QRIS / E-Wallet'));
+        $orderSource = trim((string)($input['order_source'] ?? 'portal'));
+        $guestName = trim((string)($input['customer_name'] ?? ''));
+
+        $actorId = $user['id'] ?? 'qr_guest';
+        $customerName = $user['name'] ?? ($guestName !== '' ? $guestName : 'Pelanggan QR Meja');
 
         if (!is_array($cartItems) || empty($cartItems)) {
-            throw new InvalidArgumentException('Your cart is empty. Please add at least one item.');
+            throw new InvalidArgumentException('Keranjang pesanan masih kosong. Silakan pilih menu terlebih dahulu.');
         }
 
         $settings = $this->db->getDocument('settings', 'business_config') ?? [];
@@ -68,13 +73,16 @@ class OrderService
 
         return $this->db->runTransaction(function (FirestoreInterface $tx) use (
             $user,
+            $actorId,
+            $customerName,
             $cartItems,
             $roomId,
             $notes,
             $paymentMethod,
+            $orderSource,
             $lowThreshold
         ) {
-            $roomNumber = 'Counter Pickup';
+            $roomNumber = 'Meja / Counter';
             $sessionId = null;
 
             if ($roomId !== '') {
@@ -83,7 +91,7 @@ class OrderService
                     $roomNumber = (string)($room['room_number'] ?? $room['name']);
                     $sessionId = $room['current_session_id'] ?? null;
                 }
-            } else {
+            } elseif ($user !== null) {
                 // Auto-detect if customer currently has an active session in any room
                 $userSessions = $tx->queryDocuments('sessions', [
                     ['field' => 'user_id', 'op' => '==', 'value' => $user['id']],
@@ -107,12 +115,12 @@ class OrderService
                 $itemId = trim((string)($line['item_id'] ?? ($line['id'] ?? '')));
                 $qty = (int)($line['quantity'] ?? 0);
                 if ($itemId === '' || $qty <= 0) {
-                    throw new InvalidArgumentException('Invalid item or quantity in cart.');
+                    throw new InvalidArgumentException('Item atau jumlah pesanan tidak valid.');
                 }
 
                 $menuItem = $tx->getDocument('menu_items', $itemId);
                 if (!$menuItem || empty($menuItem['is_active'])) {
-                    throw new RuntimeException("Menu item '{$itemId}' is no longer available.");
+                    throw new RuntimeException("Menu '{$itemId}' sedang tidak tersedia.");
                 }
 
                 $currentStock = (int)($menuItem['stock'] ?? 0);
@@ -144,17 +152,23 @@ class OrderService
                 ];
             }
 
+            $paymentStatus = in_array(strtolower($paymentMethod), ['kasir', 'cash', 'room tab'], true)
+                ? 'Bayar di Kasir'
+                : 'Lunas (Digital)';
+
             $orderDoc = $tx->createDocument('orders', [
-                'user_id' => $user['id'],
-                'customer_name' => $user['name'],
+                'user_id' => $actorId,
+                'customer_name' => $customerName,
                 'room_id' => $roomId ?: null,
                 'room_number' => $roomNumber,
                 'session_id' => $sessionId,
                 'items' => $orderLines,
                 'total_amount' => $totalAmount,
-                'status' => 'Accepted', // Confirmed & stock atomically deducted
+                'status' => 'Accepted', // Masuk otomatis ke Dashboard Dapur/Barista
                 'stock_deducted' => true,
                 'payment_method' => $paymentMethod,
+                'payment_status' => $paymentStatus,
+                'order_source' => $orderSource,
                 'notes' => $notes,
                 'is_demo' => false,
             ]);
@@ -176,27 +190,37 @@ class OrderService
                     'previous_stock' => $prevStock,
                     'new_stock' => $newStock,
                     'reason' => 'Order Confirmed (' . $orderDoc['id'] . ')',
-                    'actor_id' => $user['id'],
+                    'actor_id' => $actorId,
                 ]);
 
                 if ($newStock <= $lowThreshold) {
                     $tx->createDocument('notifications', [
-                        'user_id' => $user['id'],
+                        'user_id' => $actorId,
                         'role_target' => 'admin',
                         'title' => 'Low Stock Alert: ' . $item['name'],
-                        'message' => sprintf('Stock for "%s" has dropped to %d units (threshold: %d).', $item['name'], $newStock, $lowThreshold),
+                        'message' => sprintf('Stok "%s" tersisa %d unit (batas minimum: %d). Segera isi ulang.', $item['name'], $newStock, $lowThreshold),
                         'type' => 'warning',
                         'is_read' => false,
                     ]);
                 }
             }
 
+            // Notify kitchen/barista & admin
+            $tx->createDocument('notifications', [
+                'user_id' => $actorId,
+                'role_target' => 'admin',
+                'title' => 'Pesanan Dapur/Barista Baru #' . $orderDoc['id'],
+                'message' => sprintf('Pesanan baru dari %s (Ruangan/Meja: %s) senilai Rp %s via %s.', $customerName, $roomNumber, number_format($totalAmount, 0, ',', '.'), $paymentMethod),
+                'type' => 'info',
+                'is_read' => false,
+            ]);
+
             // Record F&B financial transaction
             $tx->createDocument('transactions', [
                 'type' => 'fnb',
                 'reference_id' => $orderDoc['id'],
-                'user_id' => $user['id'],
-                'customer_name' => $user['name'],
+                'user_id' => $actorId,
+                'customer_name' => $customerName,
                 'room_id' => $roomId ?: null,
                 'description' => sprintf('F&B Order #%s (%s)', $orderDoc['id'], $roomNumber),
                 'amount' => $totalAmount,

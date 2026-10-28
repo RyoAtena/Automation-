@@ -105,6 +105,70 @@ window.NexusCustomer = {
         NexusApp.navigate('cust-games');
     },
 
+    renderWorkflowDiagramHtml() {
+        const isAdmin = NexusApp.state.user && NexusApp.state.user.role === 'admin';
+        return `
+            <div class="card" style="margin-bottom:24px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:18px;">
+                    <div>
+                        <span class="badge badge-info" style="margin-bottom:6px;">INTEGRATED WORKFLOW</span>
+                        <h3 style="font-size:1.18rem;">Alur Pemesanan QR Meja, Pembayaran &amp; Dashboard Dapur/Barista</h3>
+                        <p style="font-size:0.82rem; color:var(--text-secondary);">Klik pada setiap tahapan di bawah ini untuk menjalankan atau menguji fiturnya secara langsung.</p>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="NexusApp.openQrScannerSimulatorModal()">
+                        📱 Scan / Pilih QR Meja &amp; Ruangan
+                    </button>
+                </div>
+
+                <div class="workflow-stack">
+                    <div class="workflow-step" onclick="NexusApp.openQrScannerSimulatorModal()">
+                        <div class="workflow-step-icon">📱</div>
+                        <div class="workflow-step-title">Pelanggan membuka NexusFlow</div>
+                        <div class="workflow-step-sub">Melalui aplikasi web atau scan QR code di meja / ruangan gaming</div>
+                    </div>
+                    <div class="workflow-arrow">&darr;</div>
+
+                    <div class="workflow-step" onclick="NexusApp.navigate('cust-menu')">
+                        <div class="workflow-step-title">Memilih menu dan membuat pesanan</div>
+                        <div class="workflow-step-sub">Menu, harga Rupiah, dan ketersediaan stok ditampilkan otomatis secara real-time</div>
+                    </div>
+                    <div class="workflow-arrow">&darr;</div>
+
+                    <div class="workflow-step" onclick="NexusApp.navigate('cust-menu')">
+                        <div class="workflow-step-title">Sistem menghitung total pembayaran</div>
+                        <div class="workflow-step-sub">Total harga dan ringkasan pesanan dibuat otomatis di keranjang</div>
+                    </div>
+                    <div class="workflow-arrow">&darr;</div>
+
+                    <div class="workflow-step" onclick="NexusApp.navigate('cust-menu')">
+                        <div class="workflow-step-title">Pelanggan melakukan pembayaran</div>
+                        <div class="workflow-step-sub">Kasir atau metode pembayaran digital yang didukung (QRIS, E-Wallet, Kartu, Room Tab)</div>
+                    </div>
+                    <div class="workflow-arrow">&darr;</div>
+
+                    <div class="workflow-step" onclick="${isAdmin ? "NexusApp.navigate('adm-orders')" : "NexusApp.navigate('cust-session')"}">
+                        <div class="workflow-step-title">Pesanan otomatis masuk ke dashboard dapur/barista</div>
+                        <div class="workflow-step-sub">Dapur/barista menerima tiket pesanan real-time lengkap dengan nomor ruangan/meja</div>
+                    </div>
+                    <div class="workflow-arrow">&darr;</div>
+
+                    <div class="workflow-step" onclick="${isAdmin ? "NexusApp.navigate('adm-menu')" : "NexusApp.navigate('cust-menu')"}">
+                        <div class="workflow-step-icon">&#8635;</div>
+                        <div class="workflow-step-title">Stok dan laporan penjualan diperbarui</div>
+                        <div class="workflow-step-sub">Sistem memperbarui data transaksi, memotong stok otomatis, dan menghitung penjualan harian</div>
+                    </div>
+                    <div class="workflow-arrow">&darr;</div>
+
+                    <div class="workflow-step" onclick="${isAdmin ? "NexusApp.navigate('adm-finance')" : "NexusApp.openAuthModal('login')"}">
+                        <div class="workflow-step-icon">📊</div>
+                        <div class="workflow-step-title">Pemilik memantau performa kafe &amp; rental</div>
+                        <div class="workflow-step-sub">Omzet harian, menu terlaris, dan daftar stok yang perlu diisi ulang</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
     // =========================================================================
     // 1. HOME / DASHBOARD
     // =========================================================================
@@ -193,6 +257,8 @@ window.NexusCustomer = {
             <div class="grid-3">
                 ${rooms.map(r => this.renderRoomCardHtml(r)).join('')}
             </div>
+
+            ${this.renderWorkflowDiagramHtml()}
         `;
     },
 
@@ -625,17 +691,32 @@ window.NexusCustomer = {
     },
 
     // =========================================================================
-    // 5. FOOD AND BEVERAGE MENU & CART
+    // 5. FOOD AND BEVERAGE MENU & CART (QR Table Ordering + Digital Payment)
     // =========================================================================
     renderFoodMenu(container) {
         const items = (NexusApp.state.menu && NexusApp.state.menu.menu_items) || [];
         const cart = NexusApp.state.cart || [];
         const rooms = (NexusApp.state.roomsState && NexusApp.state.roomsState.rooms) || [];
         const ownRoom = rooms.find(r => r.current_session && r.current_session.is_own_session);
+        const qrRoomId = NexusApp.state.qrRoomId || (ownRoom ? ownRoom.id : '');
+        const qrRoomObj = rooms.find(r => r.id === qrRoomId);
 
         const cartTotal = cart.reduce((sum, c) => sum + (c.price * c.quantity), 0);
+        const totalQty = cart.reduce((sum, c) => sum + c.quantity, 0);
 
         container.innerHTML = `
+            <div class="alert-banner info" style="margin-bottom:20px;">
+                <div>
+                    <strong>📱 ${qrRoomObj ? `Terhubung ke Meja / Ruangan via QR: ${NexusApp.esc(qrRoomObj.name)}` : 'Sistem Pemesanan Menu & QR Code Meja (NexusFlow)'}</strong>
+                    <div style="font-size:0.8rem; color:var(--text-secondary); margin-top:2px;">
+                        Pilih menu &rarr; Sistem menghitung total otomatis &rarr; Bayar via QRIS Digital atau Kasir &rarr; Pesanan otomatis masuk ke Dashboard Dapur/Barista.
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="NexusApp.openQrScannerSimulatorModal()">📱 Pilih / Scan QR Meja</button>
+                </div>
+            </div>
+
             <div class="grid-2" style="grid-template-columns: 2fr 1fr; align-items:start;">
                 <div>
                     <div class="grid-2">
@@ -647,16 +728,16 @@ window.NexusCustomer = {
                                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                                             <span class="badge badge-info">${NexusApp.esc(item.category)}</span>
                                             <span class="badge ${item.stock <= 0 ? 'badge-danger' : (item.is_low_stock ? 'badge-warning' : 'badge-available')}">
-                                                ${item.stock <= 0 ? 'Out of Stock' : `${item.stock} in stock`}
+                                                ${item.stock <= 0 ? 'Stok Habis' : `Stok: ${item.stock}`}
                                             </span>
                                         </div>
                                         <h3 style="font-size:1.05rem; margin-bottom:4px;">${NexusApp.esc(item.name)}</h3>
                                         <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:12px;">${NexusApp.esc(item.description)}</p>
                                     </div>
                                     <div style="display:flex; justify-content:space-between; align-items:center; padding-top:10px; border-top:1px solid var(--border-subtle);">
-                                        <strong style="font-size:1.18rem; color:var(--neon-blue);">${NexusApp.money(item.price)}</strong>
+                                        <strong style="font-size:1.12rem; color:#ffffff;">${NexusApp.money(item.price)}</strong>
                                         <button type="button" class="btn btn-primary btn-sm" ${item.stock <= 0 ? 'disabled' : ''} onclick="NexusCustomer.addToCart('${NexusApp.esc(item.id)}')">
-                                            + Add to Order
+                                            + Tambah Pesanan
                                         </button>
                                     </div>
                                 </div>
@@ -666,11 +747,14 @@ window.NexusCustomer = {
                 </div>
 
                 <div class="card card-neon" style="position:sticky; top:90px;">
-                    <h3 style="margin-bottom:10px;">🛒 Your F&amp;B Tray</h3>
-                    ${cart.length === 0 ? `<div class="empty-state">Your tray is empty. Select snacks or drinks from the menu.</div>` : `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <h3>Ringkasan Pesanan</h3>
+                        <span class="badge badge-info">${totalQty} Item</span>
+                    </div>
+                    ${cart.length === 0 ? `<div class="empty-state">Belum ada menu dipilih. Silakan klik "+ Tambah Pesanan" pada daftar menu di samping.</div>` : `
                         <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
                             ${cart.map(c => `
-                                <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(7,9,19,0.55); padding:10px; border-radius:8px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; background:#111111; border:1px solid #262626; padding:10px; border-radius:6px;">
                                     <div style="min-width:0; flex:1;">
                                         <div style="font-weight:600; font-size:0.86rem;">${NexusApp.esc(c.name)}</div>
                                         <div style="font-size:0.76rem; color:var(--text-secondary);">${NexusApp.money(c.price)} &times; ${c.quantity} = <strong style="color:#fff;">${NexusApp.money(c.price * c.quantity)}</strong></div>
@@ -684,34 +768,44 @@ window.NexusCustomer = {
                             `).join('')}
                         </div>
 
-                        <form onsubmit="NexusCustomer.submitFoodOrder(event)">
+                        <form id="form-fnb-checkout" onsubmit="NexusCustomer.submitFoodOrder(event)">
                             <div class="form-group">
-                                <label class="form-label">Deliver to Gaming Room</label>
-                                <select name="room_id" class="form-control">
-                                    <option value="">Counter Pickup / Auto-Detect Active Room</option>
-                                    ${rooms.map(r => `<option value="${NexusApp.esc(r.id)}" ${(ownRoom && ownRoom.id === r.id) ? 'selected' : ''}>${NexusApp.esc(r.name)} (${NexusApp.esc(r.status.toUpperCase())})</option>`).join('')}
+                                <label class="form-label">Nama Pemesan</label>
+                                <input type="text" name="customer_name" class="form-control" value="${NexusApp.esc(NexusApp.state.user ? NexusApp.state.user.name : '')}" required placeholder="Masukkan nama Anda">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Meja / Ruangan Pengiriman</label>
+                                <select name="room_id" class="form-control" onchange="NexusApp.state.qrRoomId = this.value">
+                                    <option value="">Ambil di Kasir / Barista Counter</option>
+                                    ${rooms.map(r => `<option value="${NexusApp.esc(r.id)}" ${(qrRoomId === r.id) ? 'selected' : ''}>${NexusApp.esc(r.name)} (${NexusApp.esc(r.status.toUpperCase())})</option>`).join('')}
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label class="form-label">Payment Method</label>
+                                <label class="form-label">Metode Pembayaran</label>
                                 <select name="payment_method" class="form-control">
-                                    <option value="Room Tab">Charge to Room Tab</option>
-                                    <option value="E-Wallet">E-Wallet / QRIS</option>
-                                    <option value="Card">Credit / Debit Card</option>
-                                    <option value="Cash">Cash on Delivery</option>
+                                    <option value="QRIS / E-Wallet">QRIS / E-Wallet Digital (Otomatis)</option>
+                                    <option value="Kasir">Bayar di Kasir (Tunai / Non-Tunai)</option>
+                                    <option value="Card">Kartu Debit / Kredit</option>
+                                    <option value="Room Tab">Gabung Tagihan Ruangan (Room Tab)</option>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label class="form-label">Delivery Notes (Optional)</label>
-                                <input type="text" name="notes" class="form-control" placeholder="e.g., No ice, extra chili sauce">
+                                <label class="form-label">Catatan Dapur / Barista (Opsional)</label>
+                                <input type="text" name="notes" class="form-control" placeholder="Contoh: Es sedikit, saus dipisah">
                             </div>
 
-                            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-top:1px solid var(--border-subtle); margin-bottom:12px;">
-                                <span style="font-weight:700;">Total Order Price:</span>
-                                <span style="font-size:1.45rem; font-weight:800; color:var(--neon-blue);">${NexusApp.money(cartTotal)}</span>
+                            <div style="background:#111111; border:1px solid #333333; border-radius:6px; padding:12px; margin-bottom:14px;">
+                                <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:var(--text-secondary); margin-bottom:4px;">
+                                    <span>Subtotal (${totalQty} menu)</span>
+                                    <span>${NexusApp.money(cartTotal)}</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px dashed #333333;">
+                                    <span style="font-weight:700;">Total Pembayaran:</span>
+                                    <span style="font-size:1.35rem; font-weight:700; color:#ffffff;">${NexusApp.money(cartTotal)}</span>
+                                </div>
                             </div>
 
-                            <button type="submit" class="btn btn-primary" style="width:100%;">Confirm &amp; Submit Order</button>
+                            <button type="submit" class="btn btn-primary" style="width:100%;">Bayar &amp; Kirim ke Dapur/Barista</button>
                         </form>
                     `}
                 </div>
@@ -763,22 +857,95 @@ window.NexusCustomer = {
 
     async submitFoodOrder(e) {
         e.preventDefault();
-        if (!NexusApp.state.user) {
-            NexusApp.openAuthModal('login');
-            return;
-        }
         const fd = new FormData(e.target);
+        const customerName = String(fd.get('customer_name') || '').trim();
+        const roomId = String(fd.get('room_id') || '');
+        const paymentMethod = String(fd.get('payment_method') || 'QRIS / E-Wallet');
+        const notes = String(fd.get('notes') || '');
+        const cart = NexusApp.state.cart || [];
+        const cartTotal = cart.reduce((sum, c) => sum + (c.price * c.quantity), 0);
+
+        const isQris = paymentMethod.toLowerCase().includes('qris') || paymentMethod.toLowerCase().includes('wallet');
+        const qrisData = 'NEXUSARENA-PAY-' + Date.now() + '-' + Math.round(cartTotal);
+        const qrisImg = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' + encodeURIComponent(qrisData);
+
+        NexusApp.openModal('Konfirmasi Pembayaran Pesanan', `
+            <div style="text-align:center; margin-bottom:14px;">
+                <span class="badge badge-info" style="margin-bottom:6px;">METODE: ${NexusApp.esc(paymentMethod)}</span>
+                <div style="font-size:1.5rem; font-weight:700; color:#ffffff;">${NexusApp.money(cartTotal)}</div>
+                <div style="font-size:0.8rem; color:var(--text-secondary);">Pemesan: <strong>${NexusApp.esc(customerName)}</strong></div>
+            </div>
+
+            ${isQris ? `
+                <div style="text-align:center; margin-bottom:14px;">
+                    <div class="qr-frame">
+                        <img src="${NexusApp.esc(qrisImg)}" alt="QRIS Payment" width="160" height="160" style="display:block;">
+                        <div style="font-size:0.72rem; font-weight:700; margin-top:6px;">SCAN QRIS / E-WALLET</div>
+                    </div>
+                    <p style="font-size:0.78rem; color:var(--text-secondary);">Scan kode QRIS di atas menggunakan aplikasi m-Banking atau E-Wallet, lalu klik tombol konfirmasi di bawah.</p>
+                </div>
+            ` : `
+                <div class="receipt-box" style="margin-bottom:14px;">
+                    <div>Metode: <strong>${NexusApp.esc(paymentMethod)}</strong></div>
+                    <div style="margin-top:6px; color:var(--text-secondary);">Pesanan akan diteruskan langsung ke Dashboard Dapur/Barista dan tercatat pada sistem kasir.</div>
+                </div>
+            `}
+
+            <div style="display:flex; gap:10px;">
+                <button type="button" class="btn btn-secondary" style="flex:1;" onclick="NexusApp.closeModal()">Batal</button>
+                <button type="button" class="btn btn-primary" style="flex:2;" onclick="NexusCustomer.confirmAndExecuteFoodOrder(${JSON.stringify({
+                    customer_name: customerName,
+                    room_id: roomId,
+                    payment_method: paymentMethod,
+                    notes: notes,
+                    order_source: NexusApp.state.qrRoomId ? 'qr_table' : 'portal'
+                }).replace(/"/g, '&quot;')})">
+                    ✓ Konfirmasi Pembayaran &amp; Kirim Pesanan
+                </button>
+            </div>
+        `);
+    },
+
+    async confirmAndExecuteFoodOrder(payload) {
         try {
             const res = await NexusApp.api('orders.create', {
-                room_id: fd.get('room_id'),
-                payment_method: fd.get('payment_method'),
-                notes: fd.get('notes'),
+                ...payload,
                 items: NexusApp.state.cart
             });
+            const ord = res.order;
             NexusApp.state.cart = [];
-            NexusApp.toast('Order #' + res.order.id + ' confirmed! Total: ' + NexusApp.money(res.order.total_amount), 'success');
             await NexusApp.refreshSystemState(false);
-            NexusApp.navigate('cust-session');
+
+            NexusApp.openModal('Struk Pembayaran & Status Dapur/Barista', `
+                <div class="receipt-box" style="margin-bottom:16px;">
+                    <div style="text-align:center; border-bottom:1px dashed #404040; padding-bottom:10px; margin-bottom:10px;">
+                        <div style="font-weight:700; font-size:0.95rem;">NEXUS ARENA — BUKTI PESANAN</div>
+                        <div style="font-size:0.76rem; color:var(--text-secondary);">ID Pesanan: #${NexusApp.esc(ord.id)}</div>
+                    </div>
+                    <div style="margin-bottom:10px; font-size:0.82rem;">
+                        <div>Pemesan : <strong>${NexusApp.esc(ord.customer_name)}</strong></div>
+                        <div>Lokasi  : <strong>Ruangan / Meja ${NexusApp.esc(ord.room_number)}</strong></div>
+                        <div>Metode  : <strong>${NexusApp.esc(ord.payment_method)} (${NexusApp.esc(ord.payment_status || 'Terverifikasi')})</strong></div>
+                        <div>Status  : <strong>Masuk ke Dashboard Dapur/Barista (${NexusApp.esc(ord.status)})</strong></div>
+                    </div>
+                    <div style="border-top:1px dashed #404040; border-bottom:1px dashed #404040; padding:8px 0; margin-bottom:10px;">
+                        ${(ord.items || []).map(i => `
+                            <div style="display:flex; justify-content:space-between;">
+                                <span>${i.quantity}x ${NexusApp.esc(i.name)}</span>
+                                <span>${NexusApp.money(i.subtotal)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-weight:700; font-size:0.95rem;">
+                        <span>TOTAL PEMBAYARAN</span>
+                        <span>${NexusApp.money(ord.total_amount)}</span>
+                    </div>
+                </div>
+                <p style="font-size:0.8rem; color:var(--text-secondary); text-align:center; margin-bottom:14px;">
+                    ✓ Stok menu dan laporan penjualan harian telah diperbarui otomatis.
+                </p>
+                <button type="button" class="btn btn-primary" style="width:100%;" onclick="NexusApp.closeModal()">Selesai</button>
+            `);
         } catch (err) {
             NexusApp.toast(err.message, 'error');
         }

@@ -20,6 +20,7 @@ window.NexusApp = {
         notifications: [],
         cart: [],
         activePage: 'cust-home',
+        qrRoomId: '',
         serverOffsetSec: 0,
         gameFilters: { search: '', genre: '', platform: '', room_id: '' }
     },
@@ -473,10 +474,51 @@ window.NexusApp = {
             `).join('') + `</div>`;
         }
         this.openModal('System Notifications & Alerts', html);
+    },
+
+    openQrScannerSimulatorModal() {
+        const rooms = (this.state.roomsState && this.state.roomsState.rooms) || [];
+        this.openModal('QR Code Meja / Ruangan — NexusFlow Ordering', `
+            <p style="font-size:0.86rem; color:var(--text-secondary); margin-bottom:14px;">
+                Setiap ruangan/meja memiliki QR Code unik. Ketika pelanggan memindai QR Code di meja, aplikasi otomatis mendeteksi nomor ruangan dan membuka menu pemesanan.
+            </p>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
+                ${rooms.map(r => {
+                    const qrUrl = window.location.origin + '/?room=' + encodeURIComponent(r.id);
+                    const qrImg = 'https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=' + encodeURIComponent(qrUrl);
+                    return `
+                        <div class="card" style="padding:12px; text-align:center;">
+                            <div style="font-weight:700; font-size:0.86rem; margin-bottom:6px;">${this.esc(r.name)}</div>
+                            <div class="qr-frame" style="padding:8px; margin:4px auto 8px;">
+                                <img src="${this.esc(qrImg)}" alt="QR ${this.esc(r.name)}" width="110" height="110" style="display:block;">
+                            </div>
+                            <button type="button" class="btn btn-primary btn-sm" style="width:100%;" onclick="NexusApp.activateQrRoom('${this.esc(r.id)}')">
+                                Simulasi Scan QR Ini
+                            </button>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `);
+    },
+
+    activateQrRoom(roomId) {
+        this.state.qrRoomId = roomId;
+        this.closeModal();
+        const rooms = (this.state.roomsState && this.state.roomsState.rooms) || [];
+        const room = rooms.find(r => r.id === roomId);
+        this.toast('Terhubung melalui QR Meja/Ruangan: ' + (room ? room.name : roomId), 'success');
+        this.navigate('cust-menu');
     }
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomParam = urlParams.get('room');
+    if (roomParam) {
+        NexusApp.state.qrRoomId = roomParam;
+        NexusApp.state.activePage = 'cust-menu';
+    }
     document.getElementById('btn-close-modal').addEventListener('click', () => NexusApp.closeModal());
     document.getElementById('app-modal-backdrop').addEventListener('click', (e) => {
         if (e.target.id === 'app-modal-backdrop') NexusApp.closeModal();

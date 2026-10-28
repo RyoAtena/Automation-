@@ -12,7 +12,8 @@ class FirestoreRepository
     public static function getInstance(?string $overrideLocalPath = null): FirestoreInterface
     {
         if ($overrideLocalPath !== null) {
-            return new LocalFirestoreAdapter($overrideLocalPath);
+            self::$instance = new LocalFirestoreAdapter($overrideLocalPath);
+            return self::$instance;
         }
 
         if (self::$instance !== null) {

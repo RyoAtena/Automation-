@@ -1136,29 +1136,149 @@ window.NexusAdmin = {
     },
 
     // =========================================================================
-    // 7. ORDER MANAGEMENT
+    // 7. ORDER MANAGEMENT & KITCHEN / BARISTA DISPLAY SYSTEM (KDS)
     // =========================================================================
     async renderOrders(container) {
         const res = await NexusApp.api('orders.list');
         const orders = res.orders || [];
+        const menuItems = (NexusApp.state && NexusApp.state.menu_items) || [];
         const statuses = ['Pending', 'Accepted', 'Preparing', 'Ready', 'Delivered', 'Cancelled'];
 
+        // Calculate Cafe / F&B Owner Performance Metrics (Steps 6 & 7)
+        const validOrders = orders.filter(o => o.status !== 'Cancelled');
+        const totalFnbRevenue = validOrders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
+
+        const itemSalesMap = {};
+        validOrders.forEach(o => {
+            (o.items || []).forEach(it => {
+                if (!itemSalesMap[it.name]) itemSalesMap[it.name] = { name: it.name, qty: 0, rev: 0 };
+                itemSalesMap[it.name].qty += Number(it.quantity || 0);
+                itemSalesMap[it.name].rev += Number(it.subtotal || it.line_total || 0);
+            });
+        });
+        const bestSellers = Object.values(itemSalesMap).sort((a, b) => b.qty - a.qty);
+        const topItem = bestSellers.length > 0 ? `${bestSellers[0].name} (${bestSellers[0].qty} terjual)` : 'Belum ada transaksi';
+        const lowStockItems = menuItems.filter(m => Number(m.stock) <= 5);
+
+        // Group active orders for Kitchen / Barista Display System (KDS)
+        const incomingOrders = orders.filter(o => o.status === 'Pending' || o.status === 'Accepted');
+        const preparingOrders = orders.filter(o => o.status === 'Preparing');
+        const readyOrders = orders.filter(o => o.status === 'Ready');
+
+        const renderKdsTicket = (o, nextStatus, nextLabel) => `
+            <div class="kds-ticket">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <span class="badge badge-info">Meja / Room ${NexusApp.esc(o.room_number || 'Counter')}</span>
+                    <code style="font-size:0.72rem;">#${NexusApp.esc(o.id)}</code>
+                </div>
+                <div style="font-weight:700; font-size:0.88rem; margin-bottom:4px;">${NexusApp.esc(o.customer_name)}</div>
+                <div style="font-size:0.74rem; color:var(--text-secondary); margin-bottom:8px;">
+                    ${NexusApp.esc(o.payment_method || 'QRIS / Tunai')} &bull; <strong>${NexusApp.esc(o.payment_status || 'Terbayar')}</strong>
+                    ${o.order_source === 'qr_table' ? ' &bull; <span style="text-decoration:underline;">QR Meja</span>' : ''}
+                </div>
+                <div style="border-top:1px dashed var(--border); border-bottom:1px dashed var(--border); padding:6px 0; margin-bottom:8px; font-size:0.82rem;">
+                    ${(o.items || []).map(l => `<div style="display:flex; justify-content:space-between;"><span><strong>${l.quantity}&times;</strong> ${NexusApp.esc(l.name)}</span><span>${NexusApp.money(l.subtotal || l.line_total || 0)}</span></div>`).join('')}
+                    ${o.notes ? `<div style="font-size:0.75rem; color:var(--text-secondary); margin-top:4px;">Catatan: ${NexusApp.esc(o.notes)}</div>` : ''}
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                    <button class="btn btn-primary btn-xs" style="flex:1;" onclick="NexusAdmin.quickOrderStatus('${NexusApp.esc(o.id)}', '${nextStatus}')">
+                        ${nextLabel} &rarr;
+                    </button>
+                    <button class="btn btn-outline btn-xs" onclick="NexusAdmin.quickOrderStatus('${NexusApp.esc(o.id)}', 'Cancelled')" title="Batalkan & Kembalikan Stok">
+                        ✕
+                    </button>
+                </div>
+            </div>
+        `;
+
         container.innerHTML = `
+            <!-- STEP 6 & 7: OWNER CAFE / F&B PERFORMANCE MONITOR -->
+            <div class="stats-grid" style="margin-bottom:18px;">
+                <div class="stat-card">
+                    <div class="stat-label">Omzet Kafe / F&amp;B</div>
+                    <div class="stat-value">${NexusApp.money(totalFnbRevenue)}</div>
+                    <div class="stat-sub">${validOrders.length} pesanan aktif/selesai</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Menu Terlaris</div>
+                    <div class="stat-value" style="font-size:1.05rem;">${NexusApp.esc(topItem)}</div>
+                    <div class="stat-sub">Diperbarui otomatis setiap transaksi</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Stok Perlu Diisi Ulang</div>
+                    <div class="stat-value">${lowStockItems.length} Menu</div>
+                    <div class="stat-sub">${lowStockItems.length > 0 ? lowStockItems.map(i => NexusApp.esc(i.name) + ' (' + i.stock + ')').join(', ') : 'Semua stok aman (> 5 unit)'}</div>
+                </div>
+                <div class="stat-card" style="display:flex; flex-direction:column; justify-content:space-between;">
+                    <div class="stat-label">QR Code Meja / Ruangan</div>
+                    <div style="font-size:0.8rem; color:var(--text-secondary); margin:6px 0;">Cetak atau simulasi scan QR meja untuk order langsung.</div>
+                    <button class="btn btn-outline btn-sm" onclick="NexusApp.openQrScannerSimulatorModal()">📱 Buka QR Code Meja</button>
+                </div>
+            </div>
+
+            <!-- STEP 5: KITCHEN / BARISTA DISPLAY SYSTEM (LIVE KDS BOARD) -->
+            <div class="card" style="margin-bottom:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+                    <div>
+                        <h3 style="margin-bottom:2px;">👨‍🍳 Dashboard Dapur &amp; Barista (Live Kitchen Display System)</h3>
+                        <p style="font-size:0.82rem; color:var(--text-secondary);">Pesanan dari QR Code Meja/Ruangan maupun Portal otomatis masuk ke antrean dapur di bawah ini secara real-time.</p>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn btn-outline btn-sm" onclick="NexusApp.navigate('adm-menu')">📦 Kelola Stok &amp; Menu</button>
+                        <button class="btn btn-outline btn-sm" onclick="NexusApp.navigate('adm-finance')">📈 Laporan Penjualan</button>
+                    </div>
+                </div>
+
+                <div class="kds-board">
+                    <div class="kds-column">
+                        <div class="kds-column-header">
+                            <span>1. Pesanan Masuk (Antrean Baru)</span>
+                            <span class="badge badge-pending">${incomingOrders.length}</span>
+                        </div>
+                        ${incomingOrders.length === 0
+                            ? `<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:20px 0;">Belum ada pesanan baru</div>`
+                            : incomingOrders.map(o => renderKdsTicket(o, 'Preparing', 'Mulai Masak / Racik')).join('')}
+                    </div>
+
+                    <div class="kds-column">
+                        <div class="kds-column-header">
+                            <span>2. Sedang Disiapkan Dapur / Barista</span>
+                            <span class="badge badge-preparing">${preparingOrders.length}</span>
+                        </div>
+                        ${preparingOrders.length === 0
+                            ? `<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:20px 0;">Tidak ada pesanan sedang dimasak</div>`
+                            : preparingOrders.map(o => renderKdsTicket(o, 'Ready', 'Tandai Siap Diantar')).join('')}
+                    </div>
+
+                    <div class="kds-column">
+                        <div class="kds-column-header">
+                            <span>3. Siap Diantar ke Meja / Ruangan</span>
+                            <span class="badge badge-ready">${readyOrders.length}</span>
+                        </div>
+                        ${readyOrders.length === 0
+                            ? `<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:20px 0;">Tidak ada pesanan menunggu antar</div>`
+                            : readyOrders.map(o => renderKdsTicket(o, 'Delivered', 'Selesai Diantar')).join('')}
+                    </div>
+                </div>
+            </div>
+
+            <!-- FULL ORDERS & PAYMENT TABLE -->
             <div class="card">
-                <h3 style="margin-bottom:10px;">🧾 Incoming Food &amp; Beverage Orders (${orders.length})</h3>
-                <p style="font-size:0.83rem; color:var(--text-secondary); margin-bottom:14px;">Cancelling a confirmed order automatically restores its deducted stock to inventory.</p>
-                ${orders.length === 0 ? `<div class="empty-state">No F&amp;B orders yet.</div>` : `
+                <h3 style="margin-bottom:10px;">🧾 Semua Riwayat Pesanan &amp; Pembayaran (${orders.length})</h3>
+                <p style="font-size:0.83rem; color:var(--text-secondary); margin-bottom:14px;">Membatalkan pesanan otomatis mengembalikan stok yang telah dikurangi ke inventaris.</p>
+                ${orders.length === 0 ? `<div class="empty-state">Belum ada pesanan F&amp;B.</div>` : `
                     <div class="table-responsive">
                         <table class="data-table">
                             <thead>
                                 <tr>
                                     <th>Order ID</th>
-                                    <th>Room #</th>
-                                    <th>Customer</th>
-                                    <th>Items Ordered</th>
+                                    <th>Meja / Ruangan</th>
+                                    <th>Pelanggan</th>
+                                    <th>Detail Pesanan</th>
+                                    <th>Pembayaran</th>
                                     <th>Total</th>
-                                    <th>Current Status</th>
-                                    <th>Update Status</th>
+                                    <th>Status Dapur</th>
+                                    <th>Ubah Status</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1166,10 +1286,17 @@ window.NexusAdmin = {
                                     <tr>
                                         <td><code>${NexusApp.esc(o.id)}</code></td>
                                         <td><span class="badge badge-info">Room ${NexusApp.esc(o.room_number || 'Counter')}</span></td>
-                                        <td><strong>${NexusApp.esc(o.customer_name)}</strong></td>
+                                        <td>
+                                            <strong>${NexusApp.esc(o.customer_name)}</strong>
+                                            <div style="font-size:0.72rem; color:var(--text-muted);">${o.order_source === 'qr_table' ? '📱 Scan QR Meja' : '💻 Aplikasi / Portal'}</div>
+                                        </td>
                                         <td>
                                             ${(o.items || []).map(l => `<div>${l.quantity}&times; ${NexusApp.esc(l.name)}</div>`).join('')}
-                                            ${o.notes ? `<div style="font-size:0.75rem; color:var(--warning);">Note: ${NexusApp.esc(o.notes)}</div>` : ''}
+                                            ${o.notes ? `<div style="font-size:0.75rem; color:var(--text-secondary);">Catatan: ${NexusApp.esc(o.notes)}</div>` : ''}
+                                        </td>
+                                        <td>
+                                            <div style="font-size:0.8rem; font-weight:600;">${NexusApp.esc(o.payment_method || 'QRIS / Tunai')}</div>
+                                            <div style="font-size:0.72rem; color:var(--text-secondary);">${NexusApp.esc(o.payment_status || 'Lunas')}</div>
                                         </td>
                                         <td><strong>${NexusApp.money(o.total_amount)}</strong></td>
                                         <td><span class="badge badge-${NexusApp.esc(String(o.status).toLowerCase())}">${NexusApp.esc(o.status)}</span></td>
@@ -1189,6 +1316,16 @@ window.NexusAdmin = {
                 `}
             </div>
         `;
+    },
+
+    async quickOrderStatus(orderId, newStatus) {
+        try {
+            await NexusApp.api('orders.status', { order_id: orderId, status: newStatus });
+            NexusApp.toast('Pesanan #' + orderId + ' diperbarui ke ' + newStatus, 'success');
+            await NexusApp.refreshSystemState(false);
+        } catch (err) {
+            NexusApp.toast(err.message, 'error');
+        }
     },
 
     async updateOrderStatus(orderId) {

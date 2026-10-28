@@ -28,18 +28,23 @@ class LocalFirestoreAdapter implements FirestoreInterface
             if (!is_dir($dir)) {
                 @mkdir($dir, 0775, true);
             }
-            if (!is_dir($dir) || !is_writable($dir)) {
-                $this->dbPath = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'nexus_firestore_local.sqlite';
-            } else {
-                $this->dbPath = $candidatePath;
-            }
+            $this->dbPath = $candidatePath;
         }
 
-        $this->pdo = new PDO('sqlite:' . $this->dbPath, null, null, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_TIMEOUT => 10,
-        ]);
+        try {
+            $this->pdo = new PDO('sqlite:' . $this->dbPath, null, null, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_TIMEOUT => 10,
+            ]);
+        } catch (Throwable) {
+            $this->dbPath = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'nexus_firestore_local.sqlite';
+            $this->pdo = new PDO('sqlite:' . $this->dbPath, null, null, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_TIMEOUT => 10,
+            ]);
+        }
 
         $this->pdo->exec('PRAGMA journal_mode = WAL;');
         $this->pdo->exec('PRAGMA synchronous = NORMAL;');

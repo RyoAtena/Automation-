@@ -236,6 +236,21 @@ $ord->updateOrderStatus($createdOrder['id'], 'Cancelled', $adminLogin['user']);
 $stockAfterCancel = (int)$db->getDocument('menu_items', 'menu_nachos')['stock'];
 assertTrue($stockAfterCancel === $stockBefore, "Cancelling confirmed order restores stock ({$stockAfterOrder} -> {$stockAfterCancel})");
 
+// Test QR Code Table / Walk-In Guest Order (without user account login)
+$qrOrder = $ord->createOrder(null, [
+    'room_id' => 'room_101',
+    'customer_name' => 'Pelanggan QR Meja 101',
+    'order_source' => 'qr_table',
+    'payment_method' => 'QRIS',
+    'items' => [['item_id' => 'menu_nachos', 'quantity' => 2]],
+]);
+assertTrue(
+    ($qrOrder['order_source'] ?? '') === 'qr_table' &&
+    ($qrOrder['payment_status'] ?? '') === 'Lunas (Digital)' &&
+    in_array($qrOrder['status'] ?? '', ['Pending', 'Accepted'], true),
+    'QR Table order succeeds without login, records digital payment status, and enters Kitchen Display System queue'
+);
+
 // -------------------------------------------------------------------------
 // 6. FINANCIAL REPORTS, CHATBOT, SUPPORT CHAT & FEEDBACK
 // -------------------------------------------------------------------------
